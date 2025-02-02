@@ -1,0 +1,29 @@
+{
+  "dev": {
+    "awscloudformation": {
+      "AuthRoleName": "amplify-s3uploaderui-dev-39e29-authRole",
+      "UnauthRoleArn": "arn:aws:iam::571724487590:role/amplify-s3uploaderui-dev-39e29-unauthRole",
+      "AuthRoleArn": "arn:aws:iam::571724487590:role/amplify-s3uploaderui-dev-39e29-authRole",
+      "Region": "us-east-1",
+      "DeploymentBucketName": "amplify-s3uploaderui-dev-39e29-deployment",
+      "UnauthRoleName": "amplify-s3uploaderui-dev-39e29-unauthRole",
+      "StackName": "amplify-s3uploaderui-dev-39e29",
+      "StackId": "arn:aws:cloudformation:us-east-1:571724487590:stack/amplify-s3uploaderui-dev-39e29/5fa57380-cde8-11ef-8292-12d4b2343ee3",
+      "AmplifyAppId": "d197rh1tj5eu5g"
+    },
+    "categories": {
+      "auth": {
+        "s3uploaderuid51d7535": {}
+      },
+      "storage": {
+        "s30dc9381f": {}
+      },
+      "hosting": {
+        "amplifyhosting": {
+          "appId": "d197rh1tj5eu5g",
+          "type": "manual"
+        }
+      }
+    }
+  }
+}
