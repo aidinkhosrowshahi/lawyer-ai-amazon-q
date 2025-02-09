@@ -545,6 +545,24 @@ const MainContent = ({ signOut }) => {
                                 </Header>
                             }
                         />
+                    </Container>                   
+                    <Container
+                        header={
+                            <Header variant="h2">
+                                Amazon Q Assistant
+                            </Header>
+                        }
+                    >
+                        <iframe 
+                            src="https://d9x46exb.chat.qbusiness.us-east-1.on.aws/"
+                            style={{
+                                minWidth: "450px",
+                                width: "100%",
+                                height: "650px",
+                                border: "none"
+                            }}
+                            title="Amazon Q Assistant"
+                        />
                     </Container>
                     
                 </SpaceBetween>
