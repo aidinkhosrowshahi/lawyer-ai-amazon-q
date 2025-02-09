@@ -1,0 +1,237 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: IoT Pub/Sub Stack with SNS and Lambda Integration
+Parameters:
+  ProjectName:
+    Type: String
+    Default: iot-pub-sub
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+    - dev
+    - prod
+Resources:
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName:
+        Fn::Sub: ${ProjectName}-${Environment}-user-pool
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: false
+      AutoVerifiedAttributes:
+      - email
+      UsernameAttributes:
+      - email
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+          RequireUppercase: true
+    Metadata:
+      SamResourceId: CognitoUserPool
+  CognitoUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId:
+        Ref: CognitoUserPool
+      ClientName:
+        Fn::Sub: ${ProjectName}-${Environment}-user-pool-client
+      GenerateSecret: false
+      ExplicitAuthFlows:
+      - ALLOW_USER_SRP_AUTH
+      - ALLOW_REFRESH_TOKEN_AUTH
+      PreventUserExistenceErrors: ENABLED
+    Metadata:
+      SamResourceId: CognitoUserPoolClient
+  CognitoIdentityPool:
+    Type: AWS::Cognito::IdentityPool
+    Properties:
+      IdentityPoolName:
+        Fn::Sub: ${ProjectName}-${Environment}-identity-pool
+      AllowUnauthenticatedIdentities: false
+      CognitoIdentityProviders:
+      - ClientId:
+          Ref: CognitoUserPoolClient
+        ProviderName:
+          Fn::GetAtt:
+          - CognitoUserPool
+          - ProviderName
+    Metadata:
+      SamResourceId: CognitoIdentityPool
+  CognitoAuthRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Federated: cognito-identity.amazonaws.com
+          Action: sts:AssumeRoleWithWebIdentity
+          Condition:
+            StringEquals:
+              cognito-identity.amazonaws.com:aud:
+                Ref: CognitoIdentityPool
+            ForAnyValue:StringLike:
+              cognito-identity.amazonaws.com:amr: authenticated
+      Policies:
+      - PolicyName:
+          Fn::Sub: ${ProjectName}-${Environment}-cognito-auth-policy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - iot:Connect
+            - iot:Subscribe
+            - iot:Receive
+            - iot:Publish
+            Resource:
+            - Fn::Sub: arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/stepfunction/status/*
+            - Fn::Sub: arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/stepfunction/status
+            - Fn::Sub: arn:aws:iot:${AWS::Region}:${AWS::AccountId}:client/*
+    Metadata:
+      SamResourceId: CognitoAuthRole
+  CognitoIdentityPoolRoleAttachment:
+    Type: AWS::Cognito::IdentityPoolRoleAttachment
+    Properties:
+      IdentityPoolId:
+        Ref: CognitoIdentityPool
+      Roles:
+        authenticated:
+          Fn::GetAtt:
+          - CognitoAuthRole
+          - Arn
+    Metadata:
+      SamResourceId: CognitoIdentityPoolRoleAttachment
+  IoTPolicy:
+    Type: AWS::IoT::Policy
+    Properties:
+      PolicyName:
+        Fn::Sub: ${ProjectName}-${Environment}-iot-policy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - iot:Connect
+          - iot:Subscribe
+          - iot:Receive
+          - iot:Publish
+          Resource:
+          - Fn::Sub: arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/stepfunction/status/*
+          - Fn::Sub: arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/stepfunction/status
+          - Fn::Sub: arn:aws:iot:${AWS::Region}:${AWS::AccountId}:client/*
+    Metadata:
+      SamResourceId: IoTPolicy
+  NotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName:
+        Fn::Sub: ${ProjectName}-${Environment}-notification-topic
+    Metadata:
+      SamResourceId: NotificationTopic
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action: sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+      - PolicyName:
+          Fn::Sub: ${ProjectName}-${Environment}-lambda-iot-policy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - iot:Publish
+            - iot:Connect
+            Resource:
+            - Fn::Sub: arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/stepfunction/status/*
+            - Fn::Sub: arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/stepfunction/status
+            - Fn::Sub: arn:aws:iot:${AWS::Region}:${AWS::AccountId}:client/*
+    Metadata:
+      SamResourceId: LambdaExecutionRole
+  MessageRelayFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${ProjectName}-${Environment}-message-relay
+      CodeUri: s3://aws-sam-cli-managed-default-samclisourcebucket-1bwfr0kmzf3qz/iot-pub-sub/aa25b42ea16cd4ebad79af26df5cdddb
+      Handler: iot_publisher.lambda_handler
+      Runtime: python3.11
+      Timeout: 30
+      MemorySize: 128
+      Environment:
+        Variables:
+          IOT_TOPIC_PREFIX: stepfunction/
+      Role:
+        Fn::GetAtt:
+        - LambdaExecutionRole
+        - Arn
+    Metadata:
+      SamResourceId: MessageRelayFunction
+  LambdaSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: lambda
+      TopicArn:
+        Ref: NotificationTopic
+      Endpoint:
+        Fn::GetAtt:
+        - MessageRelayFunction
+        - Arn
+    Metadata:
+      SamResourceId: LambdaSubscription
+  LambdaSNSPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Ref: MessageRelayFunction
+      Principal: sns.amazonaws.com
+      SourceArn:
+        Ref: NotificationTopic
+    Metadata:
+      SamResourceId: LambdaSNSPermission
+Outputs:
+  UserPoolId:
+    Description: Cognito User Pool ID
+    Value:
+      Ref: CognitoUserPool
+  UserPoolClientId:
+    Description: Cognito User Pool Client ID
+    Value:
+      Ref: CognitoUserPoolClient
+  IdentityPoolId:
+    Description: Cognito Identity Pool ID
+    Value:
+      Ref: CognitoIdentityPool
+  IoTPolicyName:
+    Description: IoT Core Policy Name
+    Value:
+      Ref: IoTPolicy
+  Region:
+    Description: AWS Region
+    Value:
+      Ref: AWS::Region
+  SNSTopicArn:
+    Description: SNS Topic ARN
+    Value:
+      Ref: NotificationTopic
+  LambdaFunctionArn:
+    Description: Lambda Function ARN
+    Value:
+      Fn::GetAtt:
+      - MessageRelayFunction
+      - Arn
