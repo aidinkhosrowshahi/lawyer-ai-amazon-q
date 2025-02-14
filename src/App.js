@@ -1,4 +1,5 @@
 import { Box } from "@cloudscape-design/components";
+import { JobStatus } from './JobStatus';
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -296,6 +297,7 @@ const MainContent = ({ signOut }) => {
                         }
                     >
                         <div>
+                            <JobStatus caseId={caseId} />
                             {alertConfig.visible && (
                                 <Alert
                                     onDismiss={() => setAlertConfig(prev => ({...prev, visible: false}))}

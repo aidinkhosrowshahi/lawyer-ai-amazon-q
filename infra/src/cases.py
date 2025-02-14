@@ -35,6 +35,8 @@ def get_case(case_id: str) -> Dict[str, Any]:
     item = response.get('Item')
     if not item:
         raise ValueError(f"Case with ID {case_id} not found")
+    if 'status' not in item:
+        item['status'] = 'PENDING'  # Default status if none exists
     return item
 
 def list_cases() -> Dict[str, Any]:
@@ -77,11 +79,19 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         
 
 
-        elif method == 'GET' and (path == '/cases' or path == '/case'):
+        elif method == 'GET' and path == '/cases':
             result = list_cases()
             return {
                 'statusCode': 200,
-                'body': json.dumps(result['status']),
+                'body': json.dumps(result),
+                'headers': {**cors_headers, 'Content-Type': 'application/json'}
+            }
+        elif method == 'GET' and path.startswith('/cases/'):
+            case_id = path.split('/')[-1]
+            result = get_case(case_id)
+            return {
+                'statusCode': 200,
+                'body': json.dumps(result),
                 'headers': {
                     **cors_headers,
                     'Content-Type': 'application/json'
