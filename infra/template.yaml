@@ -17,31 +17,12 @@ Resources:
     Type: AWS::Serverless::Api
     Properties:
       StageName: !Ref Stage
-      # Cors:
-      #   AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
-      #   AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-      #   AllowOrigin: "'*'"
+      Cors:
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: "'*'"
 
-  GetStepFunctionStatusFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: src/
-      Handler: getStepFunctionStatus.handler
-      Runtime: python3.9
-      Architectures:
-        - x86_64
-      Policies:
-        - Version: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Action:
-                - states:DescribeExecution
-                - states:ListExecutions
-                - states:GetExecutionHistory
-              Resource: 
-                - !Sub 'arn:aws:states:${AWS::Region}:${AWS::AccountId}:execution:*:*'
-                - !Sub 'arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:*'
-      
+
 
   CaseManagementFunction:
     Type: AWS::Serverless::Function

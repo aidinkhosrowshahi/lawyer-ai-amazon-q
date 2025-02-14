@@ -10,38 +10,6 @@ from typing import Dict
 dynamodb = boto3.resource('dynamodb')
 table = dynamodb.Table(os.environ['CASES_TABLE'])
 
-# def generate_presigned_url(case_id: str, file_name: str, expiration: int = 3600) -> Dict[str, str]:
-#     try:
-#         s3_client = boto3.client(
-#             's3',
-#             config=Config(signature_version='s3v4')
-#         )
-        
-#         bucket_name = os.environ['UPLOAD_BUCKET_NAME']
-#         s3_key = f"cases/{case_id}.pdf"
-
-#         # Generate the presigned URL for PUT operation
-#         presigned_url = s3_client.generate_presigned_url(
-#             'put_object',
-#             Params={
-#                 'Bucket': bucket_name,
-#                 'Key': s3_key,
-#                 'ContentType': 'application/octet-stream'
-#             },
-#             ExpiresIn=expiration,
-#             HttpMethod='PUT'
-#         )
-
-#         signedUrl = f'curl -X PUT -T "template.yaml" -H "Content-Type: application/octet-stream" "{presigned_url}"'.replace('\\', '')
-#         return signedUrl
-
-#         #return presigned_url
-
-
-
-#     except Exception as e:
-#         raise Exception(f"Error generating presigned URL: {str(e)}")
-
 def create_case(body: Dict[str, Any]) -> Dict[str, Any]:
     """Create a new case with the provided description."""
     case_id = str(uuid.uuid4())
@@ -113,7 +81,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             result = list_cases()
             return {
                 'statusCode': 200,
-                'body': json.dumps(result),
+                'body': json.dumps(result['status']),
                 'headers': {
                     **cors_headers,
                     'Content-Type': 'application/json'
@@ -123,11 +91,9 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         elif method == 'GET' and path.startswith('/cases/'):
             case_id = path.split('/')[-1]  # Extract case_id from the path
             result = get_case(case_id)
-            print(result['signedUrl'])
-            #print(json.dumps(result['url']))
             return {
                 'statusCode': 200,
-                'body': json.dumps(result['signedUrl']),
+                 'body': json.dumps(result['status']),
                 'headers': {
                     **cors_headers,
                     'Content-Type': 'application/json'
