@@ -1,5 +1,5 @@
-import { Table, Box } from "@cloudscape-design/components";
-import { AWSIoTProvider } from '@aws-amplify/pubsub';
+import { Box } from "@cloudscape-design/components";
+
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import '@aws-amplify/ui-react/styles.css';
@@ -20,31 +20,13 @@ import {
     Input,
     TopNavigation
 } from "@cloudscape-design/components";
-import { Amplify, Auth, Storage, PubSub } from 'aws-amplify';
+import { Amplify, Auth, Storage } from 'aws-amplify';
 import { withAuthenticator } from '@aws-amplify/ui-react';
 import awsconfig from './aws-exports';
 
 Amplify.configure(awsconfig);
 
-// Configure IoT Provider
-const configureIoT = async () => {
-    try {
-        await Auth.currentSession(); // Ensure auth is ready
-        const user = await Auth.currentAuthenticatedUser();
-        const clientId = `${user.username}-${Date.now()}`;
 
-        Amplify.addPluggable(new AWSIoTProvider({
-            aws_pubsub_region: 'us-east-1',
-            aws_pubsub_endpoint: 'wss://a2hsqzd0wqnyl5-ats.iot.us-east-1.amazonaws.com/mqtt',
-            clientId: clientId
-        }));
-        console.log('IoT provider configured successfully');
-        return true;
-    } catch (error) {
-        console.error('Error configuring IoT provider:', error);
-        throw error;
-    }
-};
 
 
 // Constants
@@ -136,106 +118,7 @@ const MainContent = ({ signOut }) => {
     const [historyList, setHistoryList] = useState([]);
     const [caseId, setCaseId] = useState('');
     const [isUploading, setIsUploading] = useState(false);
-    const [iotMessages, setIotMessages] = useState([]);
-
-    // Add connection status state
-    const [connectionStatus, setConnectionStatus] = useState('Disconnected');
-
-    const [isReconnecting, setIsReconnecting] = useState(false);
-    const reconnectAttempts = useRef(0);
-    const maxReconnectAttempts = 5;
-
-    // IoT subscription
-    useEffect(() => {
-        let subscription;
-        
-        const setupIoTMessaging = async () => {
-            try {
-                if (reconnectAttempts.current >= maxReconnectAttempts) {
-                    setConnectionStatus('Failed');
-                    return;
-                }
-        
-                await configureIoT();
-                console.log('Setting up IoT subscription...');
-                
-                setConnectionStatus('Connecting...');
-                
-                subscription = PubSub.subscribe('stepfunction/status').subscribe({
-                    next: (data) => {
-                        console.log('Raw message received:', JSON.stringify(data, null, 2));
-                        reconnectAttempts.current = 0; // Reset on successful message
-                        
-                        let messageContent;
-                        if (data.value && typeof data.value === 'object') {
-                            messageContent = data.value.message || data.value;
-                        } else {
-                            messageContent = data;
-                        }
-                        
-                        const newMessage = {
-                            timestamp: new Date().toISOString(),
-                            message: typeof messageContent === 'string' ? 
-                                messageContent : 
-                                messageContent.message || 'Message received',
-                            priority: messageContent.priority || 'info',
-                            messageId: messageContent.messageId || `msg-${Date.now()}`
-                        };
-                        
-                        console.log('Processed message:', newMessage);
-                        
-                        setIotMessages(prevMessages => [newMessage, ...prevMessages].slice(0, 100));
-                        setConnectionStatus('Connected');
-                        setIsReconnecting(false);
-                    },
-                    error: async (error) => {
-                        console.error('Subscription error:', error);
-                        setConnectionStatus('Error');
-                        
-                        // Attempt to reconnect
-                        reconnectAttempts.current += 1;
-                        setIsReconnecting(true);
-                        
-                        // Wait before attempting to reconnect
-                        await new Promise(resolve => setTimeout(resolve, 2000));
-                        setupIoTMessaging();
-                    },
-                    complete: () => {
-                        console.log('Subscription completed');
-                        setConnectionStatus('Disconnected');
-                    }
-                });
-                
-                // Send test message
-                await PubSub.publish('stepfunction/status', {
-                    message: 'Connection test message',
-                    priority: 'info',
-                    messageId: `test-${Date.now()}`
-                });
-                
-            } catch (error) {
-                console.error('Error in IoT setup:', error);
-                setConnectionStatus('Error');
-                
-                // Attempt to reconnect
-                reconnectAttempts.current += 1;
-                setIsReconnecting(true);
-                
-                // Wait before attempting to reconnect
-                await new Promise(resolve => setTimeout(resolve, 2000));
-                setupIoTMessaging();
-            }
-        };
-        
-        setupIoTMessaging();
-        
-        return () => {
-            if (subscription) {
-                subscription.unsubscribe();
-                setConnectionStatus('Disconnected');
-            }
-        };
-    }, []);
+    
     const showAlert = (type, message, header) => {
         setAlertConfig({
             visible: true,
@@ -375,30 +258,7 @@ const MainContent = ({ signOut }) => {
         ]);
     }, []);
 
-    // Table column definitions
-    const columnDefinitions = [
-        {
-            id: "timestamp",
-            header: "Timestamp",
-            cell: item => new Date(item.timestamp).toLocaleString(),
-            sortingField: "timestamp"
-        },
-        {
-            id: "message",
-            header: "Message",
-            cell: item => item.message
-        },
-        {
-            id: "priority",
-            header: "Priority",
-            cell: item => item.priority
-        },
-        {
-            id: "messageId",
-            header: "Message ID",
-            cell: item => item.messageId
-        }
-    ];
+    
 
     return (
         <>
@@ -500,52 +360,7 @@ const MainContent = ({ signOut }) => {
                             )}
                         </div>
                     </Container>
-                    <Container
-                        header={
-                            <Header variant="h2">
-                                IoT Messages (Status: {connectionStatus})
-                            </Header>
-                        }
-                    >
-                        <Table
-                            columnDefinitions={columnDefinitions}
-                            items={iotMessages}
-                            loading={false}
-                            loadingText="Loading messages"
-                            sortingDisabled
-                            empty={
-                                <Box textAlign="center" color="inherit">
-                                    <b>No messages</b>
-                                    <Box padding={{ bottom: "s" }}>
-                                        {connectionStatus === 'Connected' 
-                                            ? 'Waiting for new messages...' 
-                                            : `Connection status: ${connectionStatus}`
-                                        }
-                                    </Box>
-                                </Box>
-                            }
-                            header={
-                                <Header
-                                    counter={`(${iotMessages.length})`}
-                                    info={
-                                        <Box 
-                                            color={
-                                                connectionStatus === 'Connected' ? 'green' :
-                                                connectionStatus === 'Connecting...' ? 'blue' :
-                                                'red'
-                                            }
-                                        >
-                                            {connectionStatus}
-                                            {isReconnecting && ' (Reconnecting...)'}
-                                            {connectionStatus === 'Failed' && ' (Max attempts reached)'}
-                                        </Box>
-                                    }
-                                >
-                                    StepFunction Status Messages
-                                </Header>
-                            }
-                        />
-                    </Container>                   
+                                       
                     <Container
                         header={
                             <Header variant="h2">

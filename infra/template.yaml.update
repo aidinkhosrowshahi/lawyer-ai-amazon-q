@@ -1,0 +1,54 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: 'SAM template for Case Management API for Amazon Q custom plugins
+
+  '
+Parameters:
+  Stage:
+    Type: String
+    Default: dev
+    Description: API Gateway stage name
+  CaseFilesBucketName:
+    Type: String
+    Description: Name of the existing S3 bucket to use
+    Default: s3uploaderui3fec1dbff0d74bb08b20946d2ea3871139e29-dev
+Resources:
+  ApiGatewayApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: !Ref Stage
+      Cors:
+        AllowMethods: "'*'"
+        AllowHeaders: "'*'"
+        AllowOrigin: "'*'"
+  CasesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: cases.lambda_handler
+      Runtime: python3.9
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref CasesTable
+        - S3CrudPolicy:
+            BucketName:
+              Ref: CaseFilesBucketName
+      Events:
+        CreateCase:
+          Type: Api
+          Properties:
+            Path: /cases
+            Method: POST
+            RestApiId: !Ref ApiGatewayApi
+        GetCase:
+          Type: Api
+          Properties:
+            Path: /cases/{caseId}
+            Method: GET
+            RestApiId: !Ref ApiGatewayApi
+        ListCases:
+          Type: Api
+          Properties:
+            Path: /cases
+            Method: GET
+            RestApiId: !Ref ApiGatewayApi

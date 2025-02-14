@@ -76,9 +76,23 @@ def list_cases() -> Dict[str, Any]:
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """Main handler for case management API."""
+    cors_headers = {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
+        'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS'
+    }
+    
     try:
         method = event['httpMethod']
         path = event['path']
+        
+        # Handle OPTIONS requests for CORS preflight
+        if method == 'OPTIONS':
+            return {
+                'statusCode': 200,
+                'headers': cors_headers,
+                'body': ''
+            }
         
         if method == 'POST' and path == '/cases':
             body = json.loads(event['body']) if event.get('body') else {}
@@ -87,7 +101,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             return {
                 'statusCode': 201,
                 'body': json.dumps(result),
-                'headers': {
+                'headers': {**cors_headers,
                     'Content-Type': 'application/json'
                 }
             }
@@ -95,12 +109,13 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         
 
 
-        elif method == 'GET' and path == '/cases':
+        elif method == 'GET' and (path == '/cases' or path == '/case'):
             result = list_cases()
             return {
                 'statusCode': 200,
                 'body': json.dumps(result),
                 'headers': {
+                    **cors_headers,
                     'Content-Type': 'application/json'
                 }
             }
@@ -114,6 +129,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'statusCode': 200,
                 'body': json.dumps(result['signedUrl']),
                 'headers': {
+                    **cors_headers,
                     'Content-Type': 'application/json'
                 }
             }
@@ -125,6 +141,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'statusCode': 404,
             'body': json.dumps({'error': 'Not found'}),
             'headers': {
+                **cors_headers,
                 'Content-Type': 'application/json'
             }
         }
@@ -132,16 +149,18 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     except ValueError as e:
         return {
             'statusCode': 404,
-            'body': json.dumps({'error': str(e)}),
             'headers': {
+                **cors_headers,
                 'Content-Type': 'application/json'
-            }
+            },
+            'body': json.dumps({'error': str(e)})
         }
     except Exception as e:
         return {
             'statusCode': 500,
-            'body': json.dumps({'error': str(e)}),
             'headers': {
+                **cors_headers,
                 'Content-Type': 'application/json'
-            }
+            },
+            'body': json.dumps({'error': str(e)})
         }

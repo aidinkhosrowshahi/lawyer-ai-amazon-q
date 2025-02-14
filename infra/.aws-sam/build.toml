@@ -7,6 +7,6 @@ architecture = "x86_64"
 handler = "cases.lambda_handler"
 manifest_hash = ""
 packagetype = "Zip"
-functions = ["CaseManagementFunction", "S3MetadataProcessorFunction"]
+functions = ["GetStepFunctionStatusFunction", "CaseManagementFunction", "S3MetadataProcessorFunction"]
 
 [layer_build_definitions]

@@ -13,14 +13,66 @@ Parameters:
     Description: Name of the existing S3 bucket to use
     Default: s3uploaderui3fec1dbff0d74bb08b20946d2ea3871139e29-dev
 Resources:
+  ApiGatewayApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: !Ref Stage
+      Cors:
+        AllowMethods: "GET,POST,PUT,DELETE,OPTIONS"
+        AllowHeaders: "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token"
+        AllowOrigin: "*"
+  GetStepFunctionStatusFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: getStepFunctionStatus.handler
+      Events:
+        GetStepFunctionStatus:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGatewayApi
+            Path: /execution-status
+            Method: GET
+      Runtime: python3.9
+      Architectures:
+        - x86_64
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - states:DescribeExecution
+                - states:ListExecutions
+                - states:GetExecutionHistory
+              Resource: 
+                - !Sub 'arn:aws:states:${AWS::Region}:${AWS::AccountId}:execution:*:*'
+                - !Sub 'arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:*'
+      Events:
+        GetStatus:
+          Type: Api
+          Properties:
+            Path: /execution-status
+            Method: GET
+            RestApiId: !Ref ApiGatewayApi
+            
+  ApiGatewayApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: !Ref Stage
+      Cors:
+        AllowMethods: "'GET,POST,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: "'*'"
+
   CaseManagementFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: src/
       Handler: cases.lambda_handler
+      
       Runtime: python3.9
       Architectures:
-      - x86_64
+        - x86_64
       Environment:
         Variables:
           CASES_TABLE:
@@ -28,12 +80,12 @@ Resources:
           UPLOAD_BUCKET_NAME:
             Ref: CaseFilesBucketName
       Policies:
-      - DynamoDBCrudPolicy:
-          TableName:
-            Ref: CasesTable
-      - S3CrudPolicy:
-          BucketName:
-            Ref: CaseFilesBucketName
+        - DynamoDBCrudPolicy:
+            TableName:
+              Ref: CasesTable
+        - S3CrudPolicy:
+            BucketName:
+              Ref: CaseFilesBucketName
       Events:
         CreateCase:
           Type: Api
@@ -45,18 +97,6 @@ Resources:
           Properties:
             Path: /cases/{caseId}
             Method: GET
-        ListCases:
-          Type: Api
-          Properties:
-            Path: /cases
-            Method: GET
-        GetUploadUrl:
-          Type: Api
-          Properties:
-            Path: /cases/{caseId}/upload
-            Method: GET
-    Metadata:
-      SamResourceId: CaseManagementFunction
   CasesTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -203,7 +243,6 @@ Resources:
             Action: sts:AssumeRole
       MaxSessionDuration: 3600
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AmazonSNSFullAccess
         - arn:aws:iam::aws:policy/AWSLambda_FullAccess
       Policies:
         - PolicyName: ConsolidatedStatesPolicy
@@ -236,5 +275,5 @@ Outputs:
   CaseManagementApi:
     Description: API Gateway endpoint URL
     Value:
-      Fn::Sub: https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/cases
+      Fn::Sub: https://${ApiGatewayApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/cases
   
