@@ -1,0 +1,98 @@
+openapi: "3.0.1"
+
+info:
+  title: "q-business-plugins-api"
+  description: "API for managing business cases"
+  version: "1.0.0"
+
+servers:
+  - url: "https://rdn70kgdwg.execute-api.us-east-1.amazonaws.com/Prod"
+
+paths:
+  /cases/{caseId}:
+    get:
+      operationId: GetCurlCommand
+      description: "get curl signedUrl to upload data to s3"
+      parameters:
+        - name: "caseId"
+          in: "path"
+          required: true
+          description: "Unique identifier of the case"
+          schema:
+            type: "string"
+      responses:
+        "200":
+          description: "provide curl signedUrl to upload data to s3"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Case"
+        
+  /cases:
+   
+    post:
+      operationId: CreateCase
+      description: "Creates a new case"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CaseRequest"
+      responses:
+        "201":
+          description: "Case created successfully"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CaseCreated"
+      
+        
+        
+ 
+components:
+  schemas:
+    CaseCreated:
+      type: "object"
+      properties:
+        caseId:
+          type: "string"
+          description: "Unique identifier for the case"
+        title:
+          type: "string"
+          description: "Case title"
+        signedUrl:
+          type: "string"
+          description: "get curl signedUrl to upload data to s3"
+        
+    CaseRequest:
+      type: "object"
+      required:
+        - "title"
+        - "description"
+      properties:
+        title:
+          type: "string"
+          description: "Case title"
+        description:
+          type: "string"
+          maxLength: 1000
+          description: "Case description"
+        UploadUrl:
+          type: "string"
+          description: "S3 upload Url"
+          
+
+    Case:
+      type: "object"
+      properties:
+        caseId:
+          type: "string"
+          description: "Unique identifier for the case"
+        title:
+          type: "string"
+          description: "Case title"
+        signedUrl:
+          type: "string"
+          description: "get curl signedUrl to upload data to s3"
+        

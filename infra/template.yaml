@@ -1,237 +1,240 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: IoT Pub/Sub Stack with SNS and Lambda Integration
+Description: 'SAM template for Case Management API for Amazon Q custom plugins
+
+  '
 Parameters:
-  ProjectName:
-    Type: String
-    Default: iot-pub-sub
-  Environment:
+  Stage:
     Type: String
     Default: dev
-    AllowedValues:
-    - dev
-    - prod
+    Description: API Gateway stage name
+  CaseFilesBucketName:
+    Type: String
+    Description: Name of the existing S3 bucket to use
+    Default: s3uploaderui3fec1dbff0d74bb08b20946d2ea3871139e29-dev
 Resources:
-  CognitoUserPool:
-    Type: AWS::Cognito::UserPool
-    Properties:
-      UserPoolName:
-        Fn::Sub: ${ProjectName}-${Environment}-user-pool
-      AdminCreateUserConfig:
-        AllowAdminCreateUserOnly: false
-      AutoVerifiedAttributes:
-      - email
-      UsernameAttributes:
-      - email
-      Policies:
-        PasswordPolicy:
-          MinimumLength: 8
-          RequireLowercase: true
-          RequireNumbers: true
-          RequireSymbols: true
-          RequireUppercase: true
-    Metadata:
-      SamResourceId: CognitoUserPool
-  CognitoUserPoolClient:
-    Type: AWS::Cognito::UserPoolClient
-    Properties:
-      UserPoolId:
-        Ref: CognitoUserPool
-      ClientName:
-        Fn::Sub: ${ProjectName}-${Environment}-user-pool-client
-      GenerateSecret: false
-      ExplicitAuthFlows:
-      - ALLOW_USER_SRP_AUTH
-      - ALLOW_REFRESH_TOKEN_AUTH
-      PreventUserExistenceErrors: ENABLED
-    Metadata:
-      SamResourceId: CognitoUserPoolClient
-  CognitoIdentityPool:
-    Type: AWS::Cognito::IdentityPool
-    Properties:
-      IdentityPoolName:
-        Fn::Sub: ${ProjectName}-${Environment}-identity-pool
-      AllowUnauthenticatedIdentities: false
-      CognitoIdentityProviders:
-      - ClientId:
-          Ref: CognitoUserPoolClient
-        ProviderName:
-          Fn::GetAtt:
-          - CognitoUserPool
-          - ProviderName
-    Metadata:
-      SamResourceId: CognitoIdentityPool
-  CognitoAuthRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-        - Effect: Allow
-          Principal:
-            Federated: cognito-identity.amazonaws.com
-          Action: sts:AssumeRoleWithWebIdentity
-          Condition:
-            StringEquals:
-              cognito-identity.amazonaws.com:aud:
-                Ref: CognitoIdentityPool
-            ForAnyValue:StringLike:
-              cognito-identity.amazonaws.com:amr: authenticated
-      Policies:
-      - PolicyName:
-          Fn::Sub: ${ProjectName}-${Environment}-cognito-auth-policy
-        PolicyDocument:
-          Version: '2012-10-17'
-          Statement:
-          - Effect: Allow
-            Action:
-            - iot:Connect
-            - iot:Subscribe
-            - iot:Receive
-            - iot:Publish
-            Resource:
-            - Fn::Sub: arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/stepfunction/status/*
-            - Fn::Sub: arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/stepfunction/status
-            - Fn::Sub: arn:aws:iot:${AWS::Region}:${AWS::AccountId}:client/*
-    Metadata:
-      SamResourceId: CognitoAuthRole
-  CognitoIdentityPoolRoleAttachment:
-    Type: AWS::Cognito::IdentityPoolRoleAttachment
-    Properties:
-      IdentityPoolId:
-        Ref: CognitoIdentityPool
-      Roles:
-        authenticated:
-          Fn::GetAtt:
-          - CognitoAuthRole
-          - Arn
-    Metadata:
-      SamResourceId: CognitoIdentityPoolRoleAttachment
-  IoTPolicy:
-    Type: AWS::IoT::Policy
-    Properties:
-      PolicyName:
-        Fn::Sub: ${ProjectName}-${Environment}-iot-policy
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-        - Effect: Allow
-          Action:
-          - iot:Connect
-          - iot:Subscribe
-          - iot:Receive
-          - iot:Publish
-          Resource:
-          - Fn::Sub: arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/stepfunction/status/*
-          - Fn::Sub: arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/stepfunction/status
-          - Fn::Sub: arn:aws:iot:${AWS::Region}:${AWS::AccountId}:client/*
-    Metadata:
-      SamResourceId: IoTPolicy
-  NotificationTopic:
-    Type: AWS::SNS::Topic
-    Properties:
-      TopicName:
-        Fn::Sub: ${ProjectName}-${Environment}-notification-topic
-    Metadata:
-      SamResourceId: NotificationTopic
-  LambdaExecutionRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-        - Effect: Allow
-          Principal:
-            Service: lambda.amazonaws.com
-          Action: sts:AssumeRole
-      ManagedPolicyArns:
-      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-      Policies:
-      - PolicyName:
-          Fn::Sub: ${ProjectName}-${Environment}-lambda-iot-policy
-        PolicyDocument:
-          Version: '2012-10-17'
-          Statement:
-          - Effect: Allow
-            Action:
-            - iot:Publish
-            - iot:Connect
-            Resource:
-            - Fn::Sub: arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/stepfunction/status/*
-            - Fn::Sub: arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/stepfunction/status
-            - Fn::Sub: arn:aws:iot:${AWS::Region}:${AWS::AccountId}:client/*
-    Metadata:
-      SamResourceId: LambdaExecutionRole
-  MessageRelayFunction:
+  CaseManagementFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName:
-        Fn::Sub: ${ProjectName}-${Environment}-message-relay
-      CodeUri: s3://aws-sam-cli-managed-default-samclisourcebucket-1bwfr0kmzf3qz/iot-pub-sub/aa25b42ea16cd4ebad79af26df5cdddb
-      Handler: iot_publisher.lambda_handler
-      Runtime: python3.11
-      Timeout: 30
-      MemorySize: 128
+      CodeUri: src/
+      Handler: cases.lambda_handler
+      Runtime: python3.9
+      Architectures:
+      - x86_64
       Environment:
         Variables:
-          IOT_TOPIC_PREFIX: stepfunction/
+          CASES_TABLE:
+            Ref: CasesTable
+          UPLOAD_BUCKET_NAME:
+            Ref: CaseFilesBucketName
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: CasesTable
+      - S3CrudPolicy:
+          BucketName:
+            Ref: CaseFilesBucketName
+      Events:
+        CreateCase:
+          Type: Api
+          Properties:
+            Path: /cases
+            Method: POST
+        GetCase:
+          Type: Api
+          Properties:
+            Path: /cases/{caseId}
+            Method: GET
+        ListCases:
+          Type: Api
+          Properties:
+            Path: /cases
+            Method: GET
+        GetUploadUrl:
+          Type: Api
+          Properties:
+            Path: /cases/{caseId}/upload
+            Method: GET
+    Metadata:
+      SamResourceId: CaseManagementFunction
+  CasesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+      - AttributeName: caseId
+        AttributeType: S
+      KeySchema:
+      - AttributeName: caseId
+        KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+    
+  S3MetadataProcessorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: s3processor.lambda_handler
+      Runtime: python3.9
+      Architectures:
+      - x86_64
+      Policies:
+      - S3CrudPolicy:
+          BucketName:
+            Ref: CaseFilesBucketName
+     
+  
+  StateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Events:
+        S3PDFUploaded:
+          Type: EventBridgeRule
+          Properties:
+            Pattern:
+              source: 
+                - aws.s3
+              detail-type:
+                - Object Created
+              detail:
+                bucket:
+                  name:
+                    - Ref: CaseFilesBucketName
+                object:
+                  key:
+                    - wildcard: protected/*.pdf
+      Definition:
+        QueryLanguage: JSONata
+        Comment: A description of my state machine
+        StartAt: Pass
+        States:
+          Pass:
+            Type: Pass
+            Next: ACL creator
+          ACL creator:
+            Type: Task
+            Resource: arn:aws:states:::lambda:invoke
+            Output: '{% $states.result.Payload %}'
+            Arguments:
+              FunctionName: ${Lambda}
+              Payload: '{% $states.input %}'
+            Retry:
+              - ErrorEquals:
+                  - Lambda.ServiceException
+                  - Lambda.AWSLambdaException
+                  - Lambda.SdkClientException
+                  - Lambda.TooManyRequestsException
+                IntervalSeconds: 1
+                MaxAttempts: 3
+                BackoffRate: 2
+                JitterStrategy: FULL
+            Next: Sync Amazon Q index
+          Sync Amazon Q index:
+            Type: Task
+            Arguments:
+              ApplicationId: d8e2017e-4955-4bec-8ad6-263ace996089
+              DataSourceId: 4f876a94-712e-4ee2-b99e-4027d87e2500
+              IndexId: 01a660c8-7306-4bd9-9108-ad16896b9102
+            Resource: arn:aws:states:::aws-sdk:qbusiness:startDataSourceSyncJob
+            Next: ListDataSourceSyncJobs
+          ListDataSourceSyncJobs:
+            Type: Task
+            Arguments:
+              ApplicationId: d8e2017e-4955-4bec-8ad6-263ace996089
+              DataSourceId: 4f876a94-712e-4ee2-b99e-4027d87e2500
+              IndexId: 01a660c8-7306-4bd9-9108-ad16896b9102
+            Resource: arn:aws:states:::aws-sdk:qbusiness:listDataSourceSyncJobs
+            Output:
+              status: >-
+                {%
+                $states.result.History[ExecutionId=$states.input.ExecutionId].Status
+                %}
+              ExecutionId: '{% $states.input.ExecutionId %}'
+            Assign:
+              status: >-
+                {%
+                $states.result.History[ExecutionId=$states.input.ExecutionId].Status
+                %}
+              ExecutionId: '{% $states.input.ExecutionId %}'
+            Next: Choice
+          Choice:
+            Type: Choice
+            Choices:
+              - Next: Failed
+                Condition: '{% $status = ''FAILED'' %}'
+              - Next: Wait
+                Condition: '{% $status = ''SYNCING'' or $status = ''SYNCING_INDEXING'' %}'
+              - Condition: '{% $status = ''SUCCEEDED'' %}'
+                Next: Pass (1)
+            Default: Pass (2)
+          Pass (1):
+            Type: Pass
+            End: true
+          Wait:
+            Type: Wait
+            Seconds: 3
+            Next: ListDataSourceSyncJobs
+          Failed:
+            Type: Pass
+            End: true
+          Pass (2):
+            Type: Pass
+            End: true
+      DefinitionSubstitutions:
+        Lambda: !Sub 
+          - "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${LambdaFunctionName}"
+          - LambdaFunctionName: !Ref S3MetadataProcessorFunction
+      Type: STANDARD
       Role:
         Fn::GetAtt:
-        - LambdaExecutionRole
-        - Arn
-    Metadata:
-      SamResourceId: MessageRelayFunction
-  LambdaSubscription:
-    Type: AWS::SNS::Subscription
+          - Roleeb56218f
+          - Arn
+      Logging:
+        Level: 'OFF'
+        IncludeExecutionData: false
+ 
+  Roleeb56218f:
+    Type: AWS::IAM::Role
     Properties:
-      Protocol: lambda
-      TopicArn:
-        Ref: NotificationTopic
-      Endpoint:
-        Fn::GetAtt:
-        - MessageRelayFunction
-        - Arn
-    Metadata:
-      SamResourceId: LambdaSubscription
-  LambdaSNSPermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      Action: lambda:InvokeFunction
-      FunctionName:
-        Ref: MessageRelayFunction
-      Principal: sns.amazonaws.com
-      SourceArn:
-        Ref: NotificationTopic
-    Metadata:
-      SamResourceId: LambdaSNSPermission
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: sts:AssumeRole
+      MaxSessionDuration: 3600
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSNSFullAccess
+        - arn:aws:iam::aws:policy/AWSLambda_FullAccess
+      Policies:
+        - PolicyName: ConsolidatedStatesPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                  - xray:GetSamplingRules
+                  - xray:GetSamplingTargets
+                Resource:
+                  - '*'
+              - Effect: Allow
+                Action:
+                  - qbusiness:StartDataSourceSyncJob
+                  - qbusiness:ListDataSourceSyncJobs
+                  - qbusiness:ListDataSources
+                  - qbusiness:GetDataSource
+                Resource:
+                  - !Sub 'arn:aws:qbusiness:${AWS::Region}:${AWS::AccountId}:application/d8e2017e-4955-4bec-8ad6-263ace996089'
+                  - !Sub 'arn:aws:qbusiness:${AWS::Region}:${AWS::AccountId}:application/*/index/01a660c8-7306-4bd9-9108-ad16896b9102'
+                  - !Sub 'arn:aws:qbusiness:${AWS::Region}:${AWS::AccountId}:application/*/index/*/data-source/4f876a94-712e-4ee2-b99e-4027d87e2500'
+
+
+
+
 Outputs:
-  UserPoolId:
-    Description: Cognito User Pool ID
+  CaseManagementApi:
+    Description: API Gateway endpoint URL
     Value:
-      Ref: CognitoUserPool
-  UserPoolClientId:
-    Description: Cognito User Pool Client ID
-    Value:
-      Ref: CognitoUserPoolClient
-  IdentityPoolId:
-    Description: Cognito Identity Pool ID
-    Value:
-      Ref: CognitoIdentityPool
-  IoTPolicyName:
-    Description: IoT Core Policy Name
-    Value:
-      Ref: IoTPolicy
-  Region:
-    Description: AWS Region
-    Value:
-      Ref: AWS::Region
-  SNSTopicArn:
-    Description: SNS Topic ARN
-    Value:
-      Ref: NotificationTopic
-  LambdaFunctionArn:
-    Description: Lambda Function ARN
-    Value:
-      Fn::GetAtt:
-      - MessageRelayFunction
-      - Arn
+      Fn::Sub: https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/cases
+  

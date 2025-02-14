@@ -1,10 +1,11 @@
 version = 0.1
 [default.deploy.parameters]
-stack_name = "iot-pub-sub"
+stack_name = "q-business-plugins-apii"
 resolve_s3 = true
-s3_prefix = "iot-pub-sub"
+s3_prefix = "q-business-plugins-apii"
 region = "us-east-1"
 confirm_changeset = true
 capabilities = "CAPABILITY_IAM"
-parameter_overrides = "ProjectName=\"file-sync-status\" Environment=\"dev\""
+disable_rollback = true
+parameter_overrides = "Stage=\"dev\""
 image_repositories = []
