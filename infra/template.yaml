@@ -1,8 +1,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: 'SAM template for Case Management API for Amazon Q custom plugins
+Description: 'SAM template for Case Management API for Amazon Q custom plugins'
 
-  '
 Parameters:
   Stage:
     Type: String
@@ -12,27 +11,22 @@ Parameters:
     Type: String
     Description: Name of the existing S3 bucket to use
     Default: s3uploaderui3fec1dbff0d74bb08b20946d2ea3871139e29-dev
+
 Resources:
   ApiGatewayApi:
     Type: AWS::Serverless::Api
     Properties:
       StageName: !Ref Stage
-      Cors:
-        AllowMethods: "GET,POST,PUT,DELETE,OPTIONS"
-        AllowHeaders: "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token"
-        AllowOrigin: "*"
+      # Cors:
+      #   AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+      #   AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+      #   AllowOrigin: "'*'"
+
   GetStepFunctionStatusFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: src/
       Handler: getStepFunctionStatus.handler
-      Events:
-        GetStepFunctionStatus:
-          Type: Api
-          Properties:
-            RestApiId: !Ref ApiGatewayApi
-            Path: /execution-status
-            Method: GET
       Runtime: python3.9
       Architectures:
         - x86_64
@@ -47,67 +41,50 @@ Resources:
               Resource: 
                 - !Sub 'arn:aws:states:${AWS::Region}:${AWS::AccountId}:execution:*:*'
                 - !Sub 'arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:*'
-      Events:
-        GetStatus:
-          Type: Api
-          Properties:
-            Path: /execution-status
-            Method: GET
-            RestApiId: !Ref ApiGatewayApi
-            
-  ApiGatewayApi:
-    Type: AWS::Serverless::Api
-    Properties:
-      StageName: !Ref Stage
-      Cors:
-        AllowMethods: "'GET,POST,OPTIONS'"
-        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-        AllowOrigin: "'*'"
+      
 
   CaseManagementFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: src/
       Handler: cases.lambda_handler
-      
       Runtime: python3.9
       Architectures:
         - x86_64
       Environment:
         Variables:
-          CASES_TABLE:
-            Ref: CasesTable
-          UPLOAD_BUCKET_NAME:
-            Ref: CaseFilesBucketName
+          CASES_TABLE: !Ref CasesTable
+          UPLOAD_BUCKET_NAME: !Ref CaseFilesBucketName
       Policies:
         - DynamoDBCrudPolicy:
-            TableName:
-              Ref: CasesTable
+            TableName: !Ref CasesTable
         - S3CrudPolicy:
-            BucketName:
-              Ref: CaseFilesBucketName
+            BucketName: !Ref CaseFilesBucketName
       Events:
         CreateCase:
           Type: Api
           Properties:
             Path: /cases
             Method: POST
+            RestApiId: !Ref ApiGatewayApi
         GetCase:
           Type: Api
           Properties:
             Path: /cases/{caseId}
             Method: GET
+            RestApiId: !Ref ApiGatewayApi
+
   CasesTable:
     Type: AWS::DynamoDB::Table
     Properties:
       AttributeDefinitions:
-      - AttributeName: caseId
-        AttributeType: S
+        - AttributeName: caseId
+          AttributeType: S
       KeySchema:
-      - AttributeName: caseId
-        KeyType: HASH
+        - AttributeName: caseId
+          KeyType: HASH
       BillingMode: PAY_PER_REQUEST
-    
+
   S3MetadataProcessorFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -115,13 +92,11 @@ Resources:
       Handler: s3processor.lambda_handler
       Runtime: python3.9
       Architectures:
-      - x86_64
+        - x86_64
       Policies:
-      - S3CrudPolicy:
-          BucketName:
-            Ref: CaseFilesBucketName
-     
-  
+        - S3CrudPolicy:
+            BucketName: !Ref CaseFilesBucketName
+
   StateMachine:
     Type: AWS::Serverless::StateMachine
     Properties:
@@ -130,32 +105,29 @@ Resources:
           Type: EventBridgeRule
           Properties:
             Pattern:
-              source: 
+              source:
                 - aws.s3
               detail-type:
                 - Object Created
               detail:
                 bucket:
                   name:
-                    - Ref: CaseFilesBucketName
+                    - !Ref CaseFilesBucketName
                 object:
                   key:
                     - wildcard: protected/*.pdf
       Definition:
         QueryLanguage: JSONata
         Comment: A description of my state machine
-        StartAt: Pass
+        StartAt: ACL creator
         States:
-          Pass:
-            Type: Pass
-            Next: ACL creator
           ACL creator:
             Type: Task
             Resource: arn:aws:states:::lambda:invoke
-            Output: '{% $states.result.Payload %}'
+            Output: "{% $states.result.Payload.case %}"
             Arguments:
               FunctionName: ${Lambda}
-              Payload: '{% $states.input %}'
+              Payload: "{% $states.input %}"
             Retry:
               - ErrorEquals:
                   - Lambda.ServiceException
@@ -167,6 +139,9 @@ Resources:
                 BackoffRate: 2
                 JitterStrategy: FULL
             Next: Sync Amazon Q index
+            Assign:
+              caseid: "{% $states.result.Payload.case %}"
+
           Sync Amazon Q index:
             Type: Task
             Arguments:
@@ -175,6 +150,11 @@ Resources:
               IndexId: 01a660c8-7306-4bd9-9108-ad16896b9102
             Resource: arn:aws:states:::aws-sdk:qbusiness:startDataSourceSyncJob
             Next: ListDataSourceSyncJobs
+            Assign:
+              ExecutionId: "{% $states.result.ExecutionId %}"
+            Output:
+              ExecutionId: "{% $states.result.ExecutionId %}"
+
           ListDataSourceSyncJobs:
             Type: Task
             Arguments:
@@ -183,54 +163,70 @@ Resources:
               IndexId: 01a660c8-7306-4bd9-9108-ad16896b9102
             Resource: arn:aws:states:::aws-sdk:qbusiness:listDataSourceSyncJobs
             Output:
-              status: >-
-                {%
-                $states.result.History[ExecutionId=$states.input.ExecutionId].Status
-                %}
-              ExecutionId: '{% $states.input.ExecutionId %}'
+              status: "{% $states.result.History[ExecutionId=$ExecutionId].Status %}"
+              ExecutionId: "{% $ExecutionId %}"
             Assign:
-              status: >-
-                {%
-                $states.result.History[ExecutionId=$states.input.ExecutionId].Status
-                %}
-              ExecutionId: '{% $states.input.ExecutionId %}'
+              status: "{% $states.result.History[ExecutionId=$ExecutionId].Status %}"
+              ExecutionId: "{% $ExecutionId %}"
             Next: Choice
+
           Choice:
             Type: Choice
             Choices:
-              - Next: Failed
-                Condition: '{% $status = ''FAILED'' %}'
-              - Next: Wait
-                Condition: '{% $status = ''SYNCING'' or $status = ''SYNCING_INDEXING'' %}'
-              - Condition: '{% $status = ''SUCCEEDED'' %}'
-                Next: Pass (1)
-            Default: Pass (2)
-          Pass (1):
-            Type: Pass
+              - Next: Update Status
+                Condition: "{% $status = 'SYNCING' or $status = 'SYNCING_INDEXING' %}"
+            Default: Update Status (default)
+
+          Update Status:
+            Type: Task
+            Resource: arn:aws:states:::dynamodb:updateItem
+            Arguments:
+              TableName: !Ref CasesTable
+              Key:
+                caseId:
+                  S: "{% $caseid %}"
+              UpdateExpression: "SET #status = :statusValue"
+              ExpressionAttributeNames:
+                "#status": "status"
+              ExpressionAttributeValues:
+                ":statusValue":
+                  S: "{% $status %}"
+            Next: Wait
+
+          Update Status (default):
+            Type: Task
+            Resource: arn:aws:states:::dynamodb:updateItem
+            Arguments:
+              TableName: !Ref CasesTable
+              Key:
+                caseId:
+                  S: "{% $caseid %}"
+              UpdateExpression: "SET #status = :statusValue"
+              ExpressionAttributeNames:
+                "#status": "status"
+              ExpressionAttributeValues:
+                ":statusValue":
+                  S: "{% $status %}"
             End: true
+
           Wait:
             Type: Wait
             Seconds: 3
             Next: ListDataSourceSyncJobs
-          Failed:
-            Type: Pass
-            End: true
-          Pass (2):
-            Type: Pass
-            End: true
+            Assign:
+              status: "{% $states %}"
+              ExecutionId: "{% $ExecutionId %}"
+
       DefinitionSubstitutions:
         Lambda: !Sub 
           - "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${LambdaFunctionName}"
           - LambdaFunctionName: !Ref S3MetadataProcessorFunction
       Type: STANDARD
-      Role:
-        Fn::GetAtt:
-          - Roleeb56218f
-          - Arn
+      Role: !GetAtt Roleeb56218f.Arn
       Logging:
         Level: 'OFF'
         IncludeExecutionData: false
- 
+
   Roleeb56218f:
     Type: AWS::IAM::Role
     Properties:
@@ -267,13 +263,13 @@ Resources:
                   - !Sub 'arn:aws:qbusiness:${AWS::Region}:${AWS::AccountId}:application/d8e2017e-4955-4bec-8ad6-263ace996089'
                   - !Sub 'arn:aws:qbusiness:${AWS::Region}:${AWS::AccountId}:application/*/index/01a660c8-7306-4bd9-9108-ad16896b9102'
                   - !Sub 'arn:aws:qbusiness:${AWS::Region}:${AWS::AccountId}:application/*/index/*/data-source/4f876a94-712e-4ee2-b99e-4027d87e2500'
-
-
-
+              - Effect: Allow
+                Action:
+                  - dynamodb:UpdateItem
+                Resource:
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${CasesTable}'
 
 Outputs:
   CaseManagementApi:
     Description: API Gateway endpoint URL
-    Value:
-      Fn::Sub: https://${ApiGatewayApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/cases
-  
+    Value: !Sub https://${ApiGatewayApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/cases

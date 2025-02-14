@@ -47,5 +47,6 @@ def lambda_handler(event, context):
     
     return {
         'statusCode': 200,
-        'metadata_file': json_key
+        'metadata_file': json_key,
+        'case': case_id
     }
