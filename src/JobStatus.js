@@ -54,7 +54,7 @@ export const JobStatus = ({ caseId }) => {
           {
             id: "timestamp",
             header: "Last Updated",
-            cell: item => new Date(item.timestamp).toLocaleString()
+            cell: item => new Date(parseInt(item.timestamp)).toLocaleString()
           }
         ]}
         items={[jobStatus]}

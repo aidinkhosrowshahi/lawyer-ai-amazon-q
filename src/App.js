@@ -74,14 +74,14 @@ const Navigation = () => {
     return (
         <SideNavigation
             activeHref={location.pathname}
-            header={{ href: "/", text: "S3 File Uploader" }}
+            header={{ href: "/", text: "Chat with Documents" }}
             items={[
                 { type: "link", text: "Upload", href: "/" },
                 { type: "divider" },
                 {
                     type: "link",
-                    text: "AWS Documentation",
-                    href: "https://docs.aws.amazon.com",
+                    text: "Amazon Q Business",
+                    href: "https://docs.aws.amazon.com/amazonq/latest/qbusiness-ug/what-is.html",
                     external: true
                 }
             ]}
@@ -266,7 +266,7 @@ const MainContent = ({ signOut }) => {
             <TopNavigation
                 identity={{
                     href: "#",
-                    title: "S3 File Uploader"
+                    title: "Chat with Documents"
                 }}
                 utilities={[
                     {
@@ -281,9 +281,9 @@ const MainContent = ({ signOut }) => {
                     <SpaceBetween size="m">
                         <Header
                             variant="h1"
-                            description="Upload files to Amazon S3"
+                            description="Interactive Document Chat"
                         >
-                            File Upload
+                            Chat with Documents
                         </Header>
                     </SpaceBetween>
                 }
@@ -292,12 +292,30 @@ const MainContent = ({ signOut }) => {
                     <Container
                         header={
                             <Header variant="h2">
+                                Amazon Q Assistant
+                            </Header>
+                        }
+                    >
+                        <iframe 
+                            src="https://d9x46exb.chat.qbusiness.us-east-1.on.aws/"
+                            style={{
+                                minWidth: "450px",
+                                width: "100%",
+                                height: "650px",
+                                border: "none"
+                            }}
+                            title="Amazon Q Assistant"
+                        />
+                    </Container>
+
+                    <Container
+                        header={
+                            <Header variant="h2">
                                 Upload multiple objects to S3
                             </Header>
                         }
                     >
                         <div>
-                            <JobStatus caseId={caseId} />
                             {alertConfig.visible && (
                                 <Alert
                                     onDismiss={() => setAlertConfig(prev => ({...prev, visible: false}))}
@@ -366,23 +384,13 @@ const MainContent = ({ signOut }) => {
                     <Container
                         header={
                             <Header variant="h2">
-                                Amazon Q Assistant
+                                File Sync Status
                             </Header>
                         }
                     >
-                        <iframe 
-                            src="https://d9x46exb.chat.qbusiness.us-east-1.on.aws/"
-                            style={{
-                                minWidth: "450px",
-                                width: "100%",
-                                height: "650px",
-                                border: "none"
-                            }}
-                            title="Amazon Q Assistant"
-                        />
+                        <JobStatus caseId={caseId} />
                     </Container>
-                    
-                </SpaceBetween>
+                    </SpaceBetween>
                 
             </ContentLayout>
         </>

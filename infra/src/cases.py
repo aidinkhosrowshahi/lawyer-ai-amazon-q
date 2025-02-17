@@ -27,7 +27,11 @@ def create_case(body: Dict[str, Any]) -> Dict[str, Any]:
     }
     
     table.put_item(Item=item)
-    return item
+    return {
+            'caseId': case_id,
+            'description': body.get('description', ''),
+            'title': body.get('title', '')
+        }
 
 def get_case(case_id: str) -> Dict[str, Any]:
     """Retrieve a case by its ID."""
