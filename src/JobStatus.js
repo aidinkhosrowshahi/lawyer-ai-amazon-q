@@ -13,18 +13,33 @@ export const JobStatus = ({ caseId }) => {
       
       // Continue polling if job is not complete
       if (data.status !== "SUCCEEDED" && data.status !== "FAILED") {
-        setTimeout(() => checkJobStatus(caseId), 5000); // Poll every 5 seconds
+        return setTimeout(() => checkJobStatus(caseId), 5000); // Poll every 5 seconds
       }
+      return null;
     } catch (error) {
       console.error("Error checking job status:", error);
       setError("Failed to fetch job status");
+      return null;
     }
   }, []);
 
   React.useEffect(() => {
-    if (caseId) {
-      checkJobStatus(caseId);
-    }
+    let timeoutId = null;
+    
+    const poll = async () => {
+      if (caseId) {
+        timeoutId = await checkJobStatus(caseId);
+      }
+    };
+
+    poll();
+
+    // Cleanup function to clear the timeout when component unmounts
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
   }, [caseId, checkJobStatus]);
 
   if (!jobStatus) return null;
